@@ -158,3 +158,37 @@ class SurvivorBot:
             entity.store_part(self.carried_part)
             self.carried_part, self.has_part = None, False
             logging.info(f"Bot at ({self.x}, {self.y}) deposited a part at the station.")
+    # -------------------------
+    # Energy Management
+    # -------------------------
+    def rest_or_consume_parts(self, grid):
+        if not self.is_active:
+            return
+        entity = grid.get_entity(self.x, self.y)
+        if not isinstance(entity, RechargeStation):
+            return
+        if self.energy <= CRITICAL_ENERGY_THRESHOLD and self.has_part:
+            self.consume_part_immediately()
+        elif self.has_part:
+            self.consume_part_partially()
+        elif self.energy < self.energy_capacity:
+            self.energy = min(self.energy + RESTING_RECHARGE_RATE, self.energy_capacity)
+
+    def consume_part_immediately(self):
+        if self.has_part and self.carried_part:
+            self.energy = min(self.energy + PART_TOTAL_ENERGY[self.carried_part.size], self.energy_capacity)
+            self.carried_part, self.has_part = None, False
+
+    def consume_part_partially(self):
+        if self.has_part and self.carried_part:
+            rate = PART_CONSUMPTION_RATE[self.carried_part.size]
+            self.energy = min(self.energy + rate, self.energy_capacity)
+            self.consumption_accumulated += rate
+            if self.consumption_accumulated >= PART_TOTAL_ENERGY[self.carried_part.size]:
+                self.carried_part, self.has_part = None, False
+
+    def handle_inactive_removal(self, grid):
+        if not self.is_active:
+            self.steps_inactive += 1
+            if self.steps_inactive >= INACTIVE_REMOVAL_STEPS:
+                grid.remove_entity(self.x, self.y)
