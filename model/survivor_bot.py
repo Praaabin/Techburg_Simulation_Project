@@ -1,0 +1,117 @@
+import random
+import logging
+from typing import List, Tuple, Optional, Set
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
+
+class SparePart:
+    """
+    Placeholder SparePart class for demonstration.
+    Assumes each part has a 'size' attribute: 'small', 'medium', or 'large'.
+    """
+
+    def __init__(self, size: str = "small"):
+        self.size = size
+
+
+class RechargeStation:
+    """
+    Placeholder RechargeStation class with basic logic for storing parts.
+    """
+
+    def __init__(self):
+        self.stored_parts: List[SparePart] = []
+
+    def store_part(self, part: SparePart):
+        self.stored_parts.append(part)
+
+    def remove_part(self, part: SparePart):
+        if part in self.stored_parts:
+            self.stored_parts.remove(part)
+
+    def get_stored_parts(self) -> List[SparePart]:
+        return self.stored_parts
+
+
+class BotType:
+    REPAIR = "repair"
+    GATHERER = "gatherer"
+
+
+# Constants for energy and enhancements
+ENERGY_PER_MOVE = 5
+CRITICAL_ENERGY_THRESHOLD = 5
+INACTIVE_REMOVAL_STEPS = 5
+PART_TOTAL_ENERGY = {"small": 10, "medium": 30, "large": 50}
+PART_CONSUMPTION_RATE = {"small": 1, "medium": 3, "large": 5}
+RESTING_RECHARGE_RATE = 1
+MAX_SPEED_ENHANCEMENT = 100
+MAX_VISION_ENHANCEMENT = 150
+
+
+class SurvivorBot:
+    def __init__(self, x: int, y: int, bot_type: str = BotType.GATHERER, energy: int = 100):
+        self.x = x
+        self.y = y
+        self.bot_type = bot_type
+        self.energy = energy
+        self.energy_capacity = 100
+
+        self.carried_part: Optional[SparePart] = None
+        self.has_part = False
+        self.is_active = True
+        self.steps_inactive = 0
+
+        self.speed_enhancement = 0
+        self.vision_enhancement = 0
+        self.consumption_in_progress = False
+        self.consumption_accumulated = 0
+
+        self.known_parts: Set[Tuple[int, int]] = set()
+        self.known_stations: Set[Tuple[int, int]] = set()
+        self.known_drones: Set[Tuple[int, int]] = set()
+        self.known_swarms: Set[Tuple[int, int]] = set()
+
+        # New attributes for threat avoidance
+        self.threat_detection_range = 4
+        self.escape_cooldown = 0
+        self.last_threat_direction = None
+
+        logging.info(f"SurvivorBot created at ({x}, {y}) as '{bot_type}' with {energy}% energy.")
+
+
+    # -------------------------
+    # Movement and Navigation
+    # -------------------------
+    def move_to(self, new_x: int, new_y: int, grid) -> bool:
+        if not self.is_active:
+            return False
+        if grid.is_within_bounds(new_x, new_y) and grid.get_entity(new_x, new_y) is None:
+            old_x, old_y = self.x, self.y
+            grid.remove_entity(old_x, old_y)
+            self.x, self.y = new_x, new_y
+            grid.add_entity(self.x, self.y, self)
+            self.energy -= ENERGY_PER_MOVE
+            if self.energy <= 0:
+                self.is_active = False
+                logging.info(f"Bot at ({self.x}, {self.y}) became inactive due to low energy.")
+            logging.info(f"Bot moved from ({old_x}, {old_y}) to ({new_x}, {new_y}).")
+            return True
+        return False
+
+    def move_toward(self, target_x: int, target_y: int, grid, simulation_step: int) -> bool:
+        if not self.is_active:
+            return False
+        can_move = self.speed_enhancement > 50 or simulation_step % 2 == 0
+        if not can_move:
+            return False
+        old_x, old_y = self.x, self.y
+        dx, dy = target_x - self.x, target_y - self.y
+        if abs(dx) > abs(dy):
+            step_x = 1 if dx > 0 else -1
+            self.move_to(self.x + step_x, self.y, grid)
+        else:
+            step_y = 1 if dy > 0 else -1
+            self.move_to(self.x, self.y + step_y, grid)
+        return (self.x, self.y) != (old_x, old_y)
