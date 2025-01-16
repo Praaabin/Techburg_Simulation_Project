@@ -192,3 +192,70 @@ class SurvivorBot:
             self.steps_inactive += 1
             if self.steps_inactive >= INACTIVE_REMOVAL_STEPS:
                 grid.remove_entity(self.x, self.y)
+
+
+    # -------------------------
+    # Upgrades and Enhancements
+    # -------------------------
+    def upgrade_ability(self, ability: str, amount: int):
+        if ability == "speed":
+            self.speed_enhancement = min(self.speed_enhancement + amount, MAX_SPEED_ENHANCEMENT)
+        elif ability == "vision":
+            self.vision_enhancement = min(self.vision_enhancement + amount, MAX_VISION_ENHANCEMENT)
+        elif ability == "energy":
+            self.energy_capacity += amount
+
+    def share_information(self, other_bot):
+        """
+        Share knowledge with another bot about known parts, stations, and threats.
+        """
+        if not self.is_active or not other_bot.is_active:
+            return
+
+        self.known_parts.update(other_bot.known_parts)
+        self.known_stations.update(other_bot.known_stations)
+        self.known_drones.update(other_bot.known_drones)
+        self.known_swarms.update(other_bot.known_swarms)
+        logging.info(f"Bot at ({self.x}, {self.y}) shared information with bot at ({other_bot.x}, {other_bot.y}).")
+
+    def transfer_energy(self, other_bot):
+        """
+        Transfer energy from this bot to another bot to reactivate it.
+        Only applicable if the other bot is inactive and this bot has sufficient energy.
+        """
+        if self.energy > 20 and not other_bot.is_active:
+            transfer_amount = min(20, self.energy - 20)
+            self.energy -= transfer_amount
+            other_bot.energy += transfer_amount
+            if other_bot.energy > 0:
+                other_bot.is_active = True
+            logging.info(
+                f"Bot at ({self.x}, {self.y}) transferred {transfer_amount}% energy to bot at ({other_bot.x}, {other_bot.y}).")
+
+    def replicate_bot(self, other_bot, grid):
+        """
+        Attempt to replicate a new bot when two bots (repair and gatherer) are at the same recharge station.
+        """
+        if not self.is_active or not other_bot.is_active:
+            return None
+
+        station = grid.get_entity(self.x, self.y)
+        if not isinstance(station, RechargeStation):
+            return None
+
+        # Probability-based replication logic
+        if random.random() < 0.2:  # 20% chance for a gatherer bot
+            if self.energy >= 30 and other_bot.energy >= 30:
+                self.energy -= 30
+                other_bot.energy -= 30
+                new_bot = SurvivorBot(self.x, self.y, bot_type=BotType.GATHERER)
+                logging.info(f"New gatherer bot replicated at ({self.x}, {self.y}).")
+                return new_bot
+        elif random.random() < 0.05:  # 5% chance for a repair bot
+            if self.energy >= 50 and other_bot.energy >= 50:
+                self.energy -= 50
+                other_bot.energy -= 50
+                new_bot = SurvivorBot(self.x, self.y, bot_type=BotType.REPAIR)
+                logging.info(f"New repair bot replicated at ({self.x}, {self.y}).")
+                return new_bot
+        return None
