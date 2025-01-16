@@ -147,3 +147,14 @@ class SurvivorBot:
             self.carried_part, self.has_part = best_part, True
             grid.remove_entity(*best_position)
             logging.info(f"Bot at ({self.x}, {self.y}) collected part at {best_position}.")
+    # -------------------------
+    # Transport and Deposit
+    # -------------------------
+    def deposit_part(self, grid):
+        if not self.is_active or not self.has_part:
+            return
+        entity = grid.get_entity(self.x, self.y)
+        if isinstance(entity, RechargeStation):
+            entity.store_part(self.carried_part)
+            self.carried_part, self.has_part = None, False
+            logging.info(f"Bot at ({self.x}, {self.y}) deposited a part at the station.")
