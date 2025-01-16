@@ -115,3 +115,35 @@ class SurvivorBot:
             step_y = 1 if dy > 0 else -1
             self.move_to(self.x, self.y + step_y, grid)
         return (self.x, self.y) != (old_x, old_y)
+
+    # -------------------------
+    # Detection and Collection
+    # -------------------------
+    def get_detection_range(self) -> int:
+        if self.vision_enhancement <= 50:
+            return 1
+        elif self.vision_enhancement <= 100:
+            return 2
+        return 3
+
+    def detect_and_collect_part(self, grid):
+        if not self.is_active or self.has_part:
+            return
+        detection_range = self.get_detection_range()
+        best_part, best_value, best_position = None, -1, None
+        for dx in range(-detection_range, detection_range + 1):
+            for dy in range(-detection_range, detection_range + 1):
+                if dx == 0 and dy == 0:
+                    continue
+                x, y = self.x + dx, self.y + dy
+                if not grid.is_within_bounds(x, y):
+                    continue
+                entity = grid.get_entity(x, y)
+                if isinstance(entity, SparePart):
+                    value = PART_TOTAL_ENERGY.get(entity.size, 0)
+                    if value > best_value:
+                        best_part, best_value, best_position = entity, value, (x, y)
+        if best_part and best_position:
+            self.carried_part, self.has_part = best_part, True
+            grid.remove_entity(*best_position)
+            logging.info(f"Bot at ({self.x}, {self.y}) collected part at {best_position}.")
