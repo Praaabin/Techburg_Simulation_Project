@@ -37,6 +37,7 @@ class RechargeStation:
 class BotType:
     REPAIR = "repair"
     GATHERER = "gatherer"
+    SCOUT = "scout"
 
 
 # Constants for energy and enhancements
@@ -80,7 +81,6 @@ class SurvivorBot:
 
         logging.info(f"SurvivorBot created at ({x}, {y}) as '{bot_type}' with {energy}% energy.")
 
-
     # -------------------------
     # Movement and Navigation
     # -------------------------
@@ -103,18 +103,38 @@ class SurvivorBot:
     def move_toward(self, target_x: int, target_y: int, grid, simulation_step: int) -> bool:
         if not self.is_active:
             return False
+
+        # Check if the bot can move based on speed enhancement or simulation step
         can_move = self.speed_enhancement > 50 or simulation_step % 2 == 0
         if not can_move:
             return False
-        old_x, old_y = self.x, self.y
-        dx, dy = target_x - self.x, target_y - self.y
+
+        # Calculate the direction to move
+        dx = target_x - self.x
+        dy = target_y - self.y
+
+        # Move horizontally if the horizontal distance is greater
         if abs(dx) > abs(dy):
             step_x = 1 if dx > 0 else -1
-            self.move_to(self.x + step_x, self.y, grid)
+            new_x = self.x + step_x
+            new_y = self.y
         else:
+            # Move vertically if the vertical distance is greater
             step_y = 1 if dy > 0 else -1
-            self.move_to(self.x, self.y + step_y, grid)
-        return (self.x, self.y) != (old_x, old_y)
+            new_x = self.x
+            new_y = self.y + step_y
+
+        # Attempt to move to the new position
+        if grid.is_within_bounds(new_x, new_y) and grid.get_entity(new_x, new_y) is None:
+            grid.remove_entity(self.x, self.y)
+            self.x, self.y = new_x, new_y
+            grid.add_entity(self.x, self.y, self)
+            self.energy -= ENERGY_PER_MOVE
+            if self.energy <= 0:
+                self.is_active = False
+            return True
+
+        return False
 
     # -------------------------
     # Detection and Collection
@@ -147,6 +167,7 @@ class SurvivorBot:
             self.carried_part, self.has_part = best_part, True
             grid.remove_entity(*best_position)
             logging.info(f"Bot at ({self.x}, {self.y}) collected part at {best_position}.")
+
     # -------------------------
     # Transport and Deposit
     # -------------------------
@@ -158,6 +179,7 @@ class SurvivorBot:
             entity.store_part(self.carried_part)
             self.carried_part, self.has_part = None, False
             logging.info(f"Bot at ({self.x}, {self.y}) deposited a part at the station.")
+
     # -------------------------
     # Energy Management
     # -------------------------
@@ -193,7 +215,6 @@ class SurvivorBot:
             if self.steps_inactive >= INACTIVE_REMOVAL_STEPS:
                 grid.remove_entity(self.x, self.y)
 
-
     # -------------------------
     # Upgrades and Enhancements
     # -------------------------
@@ -212,10 +233,22 @@ class SurvivorBot:
         if not self.is_active or not other_bot.is_active:
             return
 
+        # Share known parts
+        other_bot.known_parts.update(self.known_parts)
         self.known_parts.update(other_bot.known_parts)
+
+        # Share known stations
+        other_bot.known_stations.update(self.known_stations)
         self.known_stations.update(other_bot.known_stations)
+
+        # Share known drones
+        other_bot.known_drones.update(self.known_drones)
         self.known_drones.update(other_bot.known_drones)
+
+        # Share known swarms
+        other_bot.known_swarms.update(self.known_swarms)
         self.known_swarms.update(other_bot.known_swarms)
+
         logging.info(f"Bot at ({self.x}, {self.y}) shared information with bot at ({other_bot.x}, {other_bot.y}).")
 
     def transfer_energy(self, other_bot):
@@ -223,14 +256,17 @@ class SurvivorBot:
         Transfer energy from this bot to another bot to reactivate it.
         Only applicable if the other bot is inactive and this bot has sufficient energy.
         """
-        if self.energy > 20 and not other_bot.is_active:
-            transfer_amount = min(20, self.energy - 20)
+        if self.energy >= 20 and not other_bot.is_active:
+            transfer_amount = min(20, self.energy)
             self.energy -= transfer_amount
             other_bot.energy += transfer_amount
             if other_bot.energy > 0:
                 other_bot.is_active = True
-            logging.info(
-                f"Bot at ({self.x}, {self.y}) transferred {transfer_amount}% energy to bot at ({other_bot.x}, {other_bot.y}).")
+            logging.info(f"Transferred {transfer_amount}% energy from Bot({self.x}, {self.y}) "
+                         f"to Bot({other_bot.x}, {other_bot.y}).")
+        else:
+            logging.warning(f"Energy transfer failed. Source bot energy: {self.energy}, "
+                            f"Target bot active: {other_bot.is_active}.")
 
     def replicate_bot(self, other_bot, grid):
         """
@@ -249,6 +285,7 @@ class SurvivorBot:
                 self.energy -= 30
                 other_bot.energy -= 30
                 new_bot = SurvivorBot(self.x, self.y, bot_type=BotType.GATHERER)
+                grid.add_entity(self.x, self.y, new_bot)
                 logging.info(f"New gatherer bot replicated at ({self.x}, {self.y}).")
                 return new_bot
         elif random.random() < 0.05:  # 5% chance for a repair bot
@@ -256,6 +293,7 @@ class SurvivorBot:
                 self.energy -= 50
                 other_bot.energy -= 50
                 new_bot = SurvivorBot(self.x, self.y, bot_type=BotType.REPAIR)
+                grid.add_entity(self.x, self.y, new_bot)
                 logging.info(f"New repair bot replicated at ({self.x}, {self.y}).")
                 return new_bot
         return None

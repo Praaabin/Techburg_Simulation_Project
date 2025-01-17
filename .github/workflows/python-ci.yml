@@ -1,4 +1,4 @@
-                          name: Python CI
+name: Python CI
 
 on:
   push:
@@ -21,7 +21,7 @@ jobs:
       - name: Set up Python 3.11
         uses: actions/setup-python@v4
         with:
-          python-version: "3.11"
+          python-version: "3.12"
 
       # Step 3: Install dependencies (optional)
       - name: Install dependencies

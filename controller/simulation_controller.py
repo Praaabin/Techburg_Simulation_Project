@@ -98,7 +98,11 @@ class SimulationController:
         """
         Main simulation loop.
         """
-        if self.is_running:
+        if not self.is_running:
+            return  # Exit if the simulation is not running
+
+        try:
+            # Increment simulation step
             self.simulation_step += 1
             logging.info(f"Simulation Step: {self.simulation_step}")
 
@@ -109,35 +113,45 @@ class SimulationController:
                 self._add_swarm()
 
             # Update spare parts
-            for part in self.parts[:]:
-                if part.is_in_station:
-                    part.recharge()
-                else:
-                    part.update_corrosion()
-                if part.is_corroded():
-                    self._remove_part(part, "corroded")
+            for part in self.parts[:]:  # Use a copy of the list to avoid modification issues
+                try:
+                    if part.is_in_station:
+                        part.recharge()
+                    else:
+                        part.update_corrosion()
+                    if part.is_corroded():
+                        self._remove_part(part, "corroded")
+                except Exception as e:
+                    logging.error(f"Error updating part {part}: {e}")
 
             # Update survivor bots
-            for bot in self.bots[:]:
-                if bot.is_active:
-                    self._update_bot(bot)
-                else:
-                    bot.handle_inactive_removal(self.grid)
-                    if not bot.is_active:
-                        self.bots.remove(bot)
+            for bot in self.bots[:]:  # Use a copy of the list to avoid modification issues
+                try:
+                    if bot.is_active:
+                        self._update_bot(bot)
+                    else:
+                        bot.handle_inactive_removal(self.grid)
+                        if not bot.is_active:
+                            self.bots.remove(bot)
+                except Exception as e:
+                    logging.error(f"Error updating bot {bot}: {e}")
 
             # Update drones
             for drone in self.drones:
-                self._update_drone(drone)
+                try:
+                    self._update_drone(drone)
+                except Exception as e:
+                    logging.error(f"Error updating drone {drone}: {e}")
 
             # Update swarms
-            for swarm in self.swarms[:]:
-                swarm.update(self.grid, self.bots, self.drones, self.swarms)
+            for swarm in self.swarms[:]:  # Use a copy of the list to avoid modification issues
+                try:
+                    swarm.update(self.grid, self.bots, self.drones, self.swarms)
+                except Exception as e:
+                    logging.error(f"Error updating swarm {swarm}: {e}")
 
-            # Update the bots_remaining metric
+            # Update metrics
             self.bots_remaining = len(self.bots)
-
-            # Update the parts_collected metric
             self.parts_collected = sum(
                 station.capacity - len(station.stored_parts) for station in self.stations
             )
@@ -146,16 +160,30 @@ class SimulationController:
             if self._check_end_conditions():
                 self.is_running = False
                 logging.info("Simulation ended!")
-                self.view.status_label.config(text="Simulation Status: Ended")
-                self.view.log_message("Simulation ended.")
+                if hasattr(self, 'view') and self.view:
+                    self.view.status_label.config(text="Simulation Status: Ended")
+                    self.view.log_message("Simulation ended.")
                 return
 
             # Render the updated state
-            self.view.render_grid()
+            if hasattr(self, 'view') and self.view:
+                try:
+                    self.view.render_grid()
+                except Exception as e:
+                    logging.error(f"Error rendering grid: {e}")
 
             # Schedule the next step
-            delay_ms = int(1000 / self.view.current_speed_factor)
-            self.view.window.after(delay_ms, self.update_simulation)
+            if hasattr(self, 'view') and self.view:
+                delay_ms = int(1000 / self.view.current_speed_factor)
+                self.view.window.after(delay_ms, self.update_simulation)
+
+        except Exception as e:
+            logging.error(f"Error in update_simulation: {e}")
+            self.is_running = False  # Stop the simulation on critical errors
+            if hasattr(self, 'view') and self.view:
+                self.view.status_label.config(text="Simulation Status: Error")
+                self.view.log_message(f"Simulation error: {e}")
+
 
     def _add_drone(self):
         """
@@ -360,14 +388,28 @@ class SimulationController:
         return not self.parts or not self.bots
 
     def toggle_simulation(self):
-        self.is_running = not self.is_running
-        if self.is_running:
-            self.view.start_pause_button.config(text="Pause")
-            self.view.status_label.config(text="Simulation Status: Running")
-            self.update_simulation()
-        else:
-            self.view.start_pause_button.config(text="Resume")
-            self.view.status_label.config(text="Simulation Status: Paused")
+        """
+        Toggle the simulation running state and update the GUI.
+        """
+        try:
+            # Toggle the running state
+            self.is_running = not self.is_running
+
+            # Update the GUI if the view is initialized
+            if hasattr(self, 'view') and self.view:
+                if self.is_running:
+                    # Start the simulation
+                    self.view.start_pause_button.config(text="Pause")
+                    self.view.status_label.config(text="Simulation Status: Running")
+                    self._start_simulation_loop()  # Start the simulation loop
+                else:
+                    # Pause the simulation
+                    self.view.start_pause_button.config(text="Resume")
+                    self.view.status_label.config(text="Simulation Status: Paused")
+                    self._stop_simulation_loop()  # Stop the simulation loop
+        except Exception as e:
+            # Log or handle the error
+            print(f"Error in toggle_simulation: {e}")
 
     def run_simulation(self):
         self.setup()
