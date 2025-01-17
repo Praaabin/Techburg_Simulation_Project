@@ -70,6 +70,10 @@ class GUIView:
         # Add a legend for entity symbols
         self.setup_legend()
 
+        # Add a log display
+        self.log_text = tk.Text(self.status_panel, height=10, width=50, state=tk.DISABLED)
+        self.log_text.pack(pady=10)
+
     def setup_controls(self):
         """
         Sets up interactive controls for the simulation.
@@ -108,7 +112,6 @@ class GUIView:
         self.speed_label.config(text=f"Speed: {value}x")
         self.controller.simulation_delay = int(1000 / self.current_speed_factor)
         self.log_message(f"Simulation speed updated to {value}x.")
-
 
     def setup_entity_counters(self):
         """
